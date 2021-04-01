@@ -1,0 +1,6 @@
+mantisbt:
+  image: theoricher/mantisbt
+  ports:
+    - "8989:80"
+  restart: always
+
