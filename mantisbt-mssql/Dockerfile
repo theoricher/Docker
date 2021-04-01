@@ -1,18 +1,35 @@
-#
-# Dockerfile for mantisbt
-#
+FROM php:7.3-apache-buster
+#WORKDIR /application
 
-FROM php:7.2-apache
-MAINTAINER kev <noreply@easypi.pro>
+ENV ACCEPT_EULA=Y
 
-RUN a2enmod rewrite
+# Fix debconf warnings upon build
+ARG DEBIAN_FRONTEND=noninteractive
 
-RUN set -xe \
+# Install selected extensions and other stuff
+RUN apt-get update \
+    && apt-get -y --no-install-recommends install apt-utils libxml2-dev gnupg apt-transport-https \
+    && apt-get clean; rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /usr/share/doc/*
+
+# Install git
+RUN apt-get update \
+    && apt-get -y install git \
+    && apt-get clean; rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /usr/share/doc/*
+
+# Install MS ODBC Driver for SQL Server
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
+    && curl https://packages.microsoft.com/config/debian/9/prod.list > /etc/apt/sources.list.d/mssql-release.list \
     && apt-get update \
-    && apt-get install -y libfreetype6-dev libpng-dev libjpeg-dev libpq-dev libxml2-dev \
-    && docker-php-ext-configure gd --with-png-dir=/usr --with-jpeg-dir=/usr --with-freetype-dir=/usr \
-    && docker-php-ext-install gd mbstring mysql mysqli pgsql soap \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get -y --no-install-recommends install msodbcsql17 unixodbc-dev \
+    && pecl install sqlsrv \
+    && pecl install pdo_sqlsrv \
+    && echo "extension=pdo_sqlsrv.so" >> `php --ini | grep "Scan for additional .ini files" | sed -e "s|.*:\s*||"`/30-pdo_sqlsrv.ini \
+    && echo "extension=sqlsrv.so" >> `php --ini | grep "Scan for additional .ini files" | sed -e "s|.*:\s*||"`/30-sqlsrv.ini \
+    && apt-get clean; rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /usr/share/doc/* \
+    && echo "MinProtocol = TLSv1.0" >> /etc/ssl/openssl.cnf
+
+# Install required extensions
+RUN docker-php-ext-install intl mysqli pdo pdo_mysql
 
 ENV MANTIS_VER 2.25.0
 ENV MANTIS_MD5 a3e4b5c4f91b5d04c37122650cb1189d
@@ -26,6 +43,5 @@ RUN set -xe \
     && rm ${MANTIS_FILE} \
     && chown -R www-data:www-data .
 
-RUN set -xe \
-    && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
-    && echo 'date.timezone = "Asia/Shanghai"' > /usr/local/etc/php/php.ini
+
+EXPOSE 80
